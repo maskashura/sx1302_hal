@@ -669,6 +669,7 @@ typedef union
 /*!
  * Radio hardware and global parameters
  */
+/*
 typedef struct SX126x_s
 {
     Gpio_t        Reset;
@@ -681,7 +682,7 @@ typedef struct SX126x_s
     PacketStatus_t PacketStatus;
     ModulationParams_t ModulationParams;
 }SX126x_t;
-
+*/
 /*!
  * Hardware IO IRQ callback function definition
  */

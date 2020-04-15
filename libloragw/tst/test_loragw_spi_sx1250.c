@@ -34,7 +34,7 @@ License: Revised BSD License, see LICENSE.TXT file include in the project
 #include "loragw_aux.h"
 #include "loragw_reg.h"
 #include "loragw_hal.h"
-#include "loragw_sx125x.h"
+#include "loragw_sx1250.h"
 #include "loragw_sx1302.h"
 
 /* -------------------------------------------------------------------------- */

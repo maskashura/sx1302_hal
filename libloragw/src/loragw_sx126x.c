@@ -54,8 +54,16 @@ License: Revised BSD License, see LICENSE.TXT file include in the project
 /*
  * Private global variables
  */
+/*!
+ * Tx and Rx timers
+ */
+//TimerEvent_t TxTimeoutTimer;
+//TimerEvent_t RxTimeoutTimer;
 
+uint32_t TxTimeout = 0;
+uint32_t RxTimeout = 0;
 
+bool RxContinuous = false;
 /*!
  * Holds the current network type for the radio
  */
@@ -116,9 +124,9 @@ int SX126xWriteCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size) {
         system("echo 7 > /sys/class/gpio/export");
         system("echo out > /sys/class/gpio/gpio7/direction");
     }
-    //NSS->1
-    system("echo 1 > /sys/class/gpio/gpio7/value");
-    out_buf[0] = (uint8_t)op_code; //0x0d write command
+    //NSS->0
+    system("echo 0 > /sys/class/gpio/gpio7/value");
+    out_buf[0] = (uint8_t)op_code; 
 
     for(i = 0; i < (int)size; i++) {
         out_buf[cmd_size + i] = data[i];
@@ -135,14 +143,7 @@ int SX126xWriteCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size) {
     a = ioctl(spi_device, SPI_IOC_MESSAGE(1), &k);
     //NSS->1
     system("echo 1 > /sys/class/gpio/gpio7/value");
-    //WaitOnBusy
-    /*
-    if( op_code != RADIO_SET_SLEEP )
-    {
-        SX126xWaitOnBusy( );
-    }
-    */
-    /* determine return code */
+    WaitOnBusy();
     if (a != (int)k.len) {
         DEBUG_MSG("ERROR: SPI WRITE FAILURE\n");
         return LGW_SPI_ERROR;
@@ -155,22 +156,20 @@ int SX126xWriteCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size) {
 
 int SX126xReadCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size) {
     int spi_device;
-    int cmd_size = 1; /* header + op_code + NOP */
+    int cmd_size = 2; /* op_code + (NOP) */
     uint8_t out_buf[cmd_size + size];
     uint8_t command_size;
     uint8_t in_buf[ARRAY_SIZE(out_buf)];
     struct spi_ioc_transfer k;
     int a, i;
-
     /* wait BUSY */
     wait_ms(WAIT_BUSY_SX1260_MS);
-
+    
     /* check input variables */
     CHECK_NULL(lgw_spi_target);
     CHECK_NULL(data);
-
+    
     spi_device = *(int *)lgw_spi_target; /* must check that spi_target is not null beforehand */
-
     if(access("/sys/class/gpio/gpio7",0) < 0){
         printf("NSS (GPIO7) is not exist!\n");   
         system("echo 7 > /sys/class/gpio/export");
@@ -178,9 +177,10 @@ int SX126xReadCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size) {
     }
     //NSS->0
     system("echo 0 > /sys/class/gpio/gpio7/value");
-    out_buf[0] = (uint8_t)op_code; //0x1d read command
-    data[0] = 0x00;
+    out_buf[0] = (uint8_t)op_code; 
+    out_buf[1] = 0x00;
     for(i = 0; i < (int)size; i++) {
+            data[i] = 0x00;
         out_buf[cmd_size + i] = data[i];
     }
     command_size = cmd_size + size;
@@ -192,32 +192,31 @@ int SX126xReadCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size) {
     k.len = command_size;
     k.cs_change = 0;
     a = ioctl(spi_device, SPI_IOC_MESSAGE(1), &k);
+
     //NSS->1
     system("echo 1 > /sys/class/gpio/gpio7/value");
-    //WaitOnBusy
-    /*
-    if( op_code != RADIO_SET_SLEEP )
-    {
-        SX126xWaitOnBusy( );
-    }
-    */
-    /* determine return code */
-    /* determine return code */
+    WaitOnBusy();
+
     if (a != (int)k.len) {
         DEBUG_MSG("ERROR: SPI READ FAILURE\n");
         return LGW_SPI_ERROR;
     } else {
         DEBUG_MSG("Note: SPI read success\n");
         //*data = in_buf[command_size - 1];
+        //printf("readcmd. status=0x%02X\n",in_buf[cmd_size - 1]);
+        for (int cnt=0;cnt<strlen(in_buf);cnt++) {
+            printf("in_buf=0x%02X\n",in_buf[cnt]);
+        }
         memcpy(data, in_buf + cmd_size, size);      //read data from input buffer
-        return LGW_SPI_SUCCESS;
+        //return LGW_SPI_SUCCESS;
+        return in_buf[cmd_size-1];  //return status
     }
 }
 
 void SX126xWriteRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
 {
     int spi_device;
-    int cmd_size = 3; /* op_code + address */
+    int cmd_size = 3; /* op_code + address+ address */
     uint8_t out_buf[cmd_size + size];
     uint8_t command_size;
     struct spi_ioc_transfer k;
@@ -236,9 +235,9 @@ void SX126xWriteRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
         system("echo 7 > /sys/class/gpio/export");
         system("echo out > /sys/class/gpio/gpio7/direction");
     }
-    //NSS->1
-    system("echo 1 > /sys/class/gpio/gpio7/value");
-    out_buf[0] = RADIO_WRITE_REGISTER; //write command
+    //NSS->0
+    system("echo 0 > /sys/class/gpio/gpio7/value");
+    out_buf[0] = RADIO_WRITE_REGISTER; //write command (0X0D)
     out_buf[1] =( address & 0xFF00 ) >> 8;
     out_buf[2] =address & 0x00FF;
     
@@ -257,14 +256,8 @@ void SX126xWriteRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
     a = ioctl(spi_device, SPI_IOC_MESSAGE(1), &k);
     //NSS->1
     system("echo 1 > /sys/class/gpio/gpio7/value");
-    //WaitOnBusy
-    /*
-    if( op_code != RADIO_SET_SLEEP )
-    {
-        SX126xWaitOnBusy( );
-    }
-    */
-    /* determine return code */
+    WaitOnBusy();
+
     if (a != (int)k.len) {
         DEBUG_MSG("ERROR: SPI WRITE FAILURE\n");
         return LGW_SPI_ERROR;
@@ -282,7 +275,7 @@ void SX126xWriteRegister( uint16_t address, uint8_t value )
 void SX126xReadRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
 {
     int spi_device;
-    int cmd_size = 1; /* header + op_code + NOP */
+    int cmd_size = 4; /* op_code + address+address + NOP */
     uint8_t out_buf[cmd_size + size];
     uint8_t command_size;
     uint8_t in_buf[ARRAY_SIZE(out_buf)];
@@ -305,9 +298,11 @@ void SX126xReadRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
     }
     //NSS->0
     system("echo 0 > /sys/class/gpio/gpio7/value");
-    out_buf[0] = RADIO_READ_REGISTER; //read command
-    buffer[0] = 0x00;
+    out_buf[0] = RADIO_READ_REGISTER; //read command (0X1D)
+    out_buf[1] =( address & 0xFF00 ) >> 8;
+    out_buf[2] =address & 0x00FF;
     for(i = 0; i < (int)size; i++) {
+        buffer[i] = 0x00;
         out_buf[cmd_size + i] = buffer[i];
     }
     command_size = cmd_size + size;
@@ -321,7 +316,7 @@ void SX126xReadRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
     a = ioctl(spi_device, SPI_IOC_MESSAGE(1), &k);
     //NSS->1
     system("echo 1 > /sys/class/gpio/gpio7/value");
-    //WaitOnBusy
+    WaitOnBusy();
     /*
     if( op_code != RADIO_SET_SLEEP )
     {
@@ -335,7 +330,10 @@ void SX126xReadRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
         return LGW_SPI_ERROR;
     } else {
         DEBUG_MSG("Note: SPI read success\n");
-        //*data = in_buf[command_size - 1];
+        /*
+        for (int cnt=0;cnt<strlen(in_buf);cnt++) {
+            printf("in_buf=0x%02X\n",in_buf[cnt]);
+        }*/
         memcpy(buffer, in_buf + cmd_size, size);
         return LGW_SPI_SUCCESS;
     }
@@ -344,6 +342,7 @@ void SX126xReadRegisters( uint16_t address, uint8_t *buffer, uint16_t size )
 uint8_t SX126xReadRegister( uint16_t address )
 {
     uint8_t data;
+    printf("ReadRegister\n"); 
     SX126xReadRegisters( address, &data, 1 );
     return data;
 }
@@ -352,11 +351,11 @@ uint8_t SX126xReadRegister( uint16_t address )
 
 int8_t SX126xGetRssiInst( void )
 {
-    uint8_t buf[1];
+    uint8_t buf;
     int8_t rssi = 0;
 
-    SX126xReadCommand( RADIO_GET_RSSIINST, buf, 1 );
-    rssi = -buf[0] >> 1;
+    SX126xReadCommand( RADIO_GET_RSSIINST, &buf, 1 );
+    rssi = -buf >> 1;
     return rssi;
 }
 
@@ -364,9 +363,10 @@ int8_t SX126xGetRssiInst( void )
 RadioStatus_t SX126xGetStatus( void )
 {
     uint8_t stat = 0;
+    uint8_t buf;
     RadioStatus_t status = { .Value = 0 };
-
-    stat = SX126xReadCommand( RADIO_GET_STATUS, NULL, 0 );
+    //stat = SX126xReadCommand( RADIO_GET_STATUS, NULL, 0 );
+    stat = SX126xReadCommand( RADIO_GET_STATUS, &buf, 1 );
     status.Fields.CmdStatus = ( stat & ( 0x07 << 1 ) ) >> 1;
     status.Fields.ChipMode = ( stat & ( 0x07 << 4 ) ) >> 4;
     return status;
@@ -403,23 +403,24 @@ bool RadioIsChannelFree( RadioModems_t modem, uint32_t freq, int16_t rssiThresh,
 
     RadioSetChannel( freq );
 
-    RadioRx( 0 );
+    //RadioRx( 0 );
 
     //DelayMs( 1 );
     usleep(100);
-    carrierSenseTime = TimerGetCurrentTime( );
+    //carrierSenseTime = TimerGetCurrentTime( );
 
     // Perform carrier sense for maxCarrierSenseTime
-    while( TimerGetElapsedTime( carrierSenseTime ) < maxCarrierSenseTime )
-    {
+   // while( TimerGetElapsedTime( carrierSenseTime ) < maxCarrierSenseTime )
+    //{
         //rssi = RadioRssi( modem );
         rssi = SX126xGetRssiInst();
+        printf("SX1261: RSSI=%d\n",rssi);
         if( rssi > rssiThresh )
         {
             status = false;
-            break;
+            //break;
         }
-    }
+    //}
     RadioSleep( );
     return status;
 }
@@ -472,7 +473,7 @@ void RadioSetModem( RadioModems_t modem )
 
 void RadioSetChannel( uint32_t freq )
 {
-    //SX126xSetRfFrequency( freq );
+    SX126xSetRfFrequency( freq );
 }
 
 void SX126xSetRfFrequency( uint32_t frequency )
@@ -554,6 +555,7 @@ void SX126xCalibrateImage( uint32_t freq )
 }
 void RadioRx( uint32_t timeout )
 {
+/*
     SX126xSetDioIrqParams( IRQ_RADIO_ALL, //IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT,
                            IRQ_RADIO_ALL, //IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT,
                            IRQ_RADIO_NONE,
@@ -564,7 +566,7 @@ void RadioRx( uint32_t timeout )
         TimerSetValue( &RxTimeoutTimer, timeout );
         TimerStart( &RxTimeoutTimer );
     }
-
+*/
     if( RxContinuous == true )
     {
         SX126xSetRx( 0xFFFFFF ); // Rx Continuous
@@ -573,4 +575,74 @@ void RadioRx( uint32_t timeout )
     {
         SX126xSetRx( RxTimeout << 6 );
     }
+}
+
+void SX126xSetTx( uint32_t timeout )
+{
+    uint8_t buf[3];
+
+    //SX126xSetOperatingMode( MODE_TX );
+
+    buf[0] = ( uint8_t )( ( timeout >> 16 ) & 0xFF );
+    buf[1] = ( uint8_t )( ( timeout >> 8 ) & 0xFF );
+    buf[2] = ( uint8_t )( timeout & 0xFF );
+    SX126xWriteCommand( RADIO_SET_TX, buf, 3 );
+}
+
+void SX126xSetRx( uint32_t timeout )
+{
+    uint8_t buf[3];
+
+    //SX126xSetOperatingMode( MODE_RX );
+
+    buf[0] = ( uint8_t )( ( timeout >> 16 ) & 0xFF );
+    buf[1] = ( uint8_t )( ( timeout >> 8 ) & 0xFF );
+    buf[2] = ( uint8_t )( timeout & 0xFF );
+    SX126xWriteCommand( RADIO_SET_RX, buf, 3 );
+}
+void WaitOnBusy(){
+
+    if(access("/sys/class/gpio/gpio4",0) < 0){
+        printf("Busy (GPIO4) is not exist!\n");   
+        system("echo 4 > /sys/class/gpio/export");
+        system("echo out > /sys/class/gpio/gpio4/direction");
+    }
+    while( GPIORead(4) == 1 );
+}
+
+int GPIORead(int pin) {
+    #define VALUE_MAX 30
+	char path[VALUE_MAX];
+	char value_str[3];
+	int fd;
+
+	snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/value", pin);
+	fd = open(path, O_RDONLY);
+	if (-1 == fd) {
+		fprintf(stderr, "Failed to open gpio value for reading!\n");
+		return(-1);
+	}
+
+	if (-1 == read(fd, value_str, 3)) {
+		fprintf(stderr, "Failed to read value!\n");
+		return(-1);
+	}
+
+	close(fd);
+
+	return(atoi(value_str));
+}
+
+void SX126xSetStandby( RadioStandbyModes_t standbyConfig )
+{
+    SX126xWriteCommand( RADIO_SET_STANDBY, ( uint8_t* )&standbyConfig, 1 );
+    /*
+    if( standbyConfig == STDBY_RC )
+    {
+        SX126xSetOperatingMode( MODE_STDBY_RC );
+    }
+    else
+    {
+        SX126xSetOperatingMode( MODE_STDBY_XOSC );
+    }*/
 }

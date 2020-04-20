@@ -59,6 +59,16 @@ typedef enum {
 int SX126xWriteCommand(RadioCommands_t op_code, uint8_t *data, uint16_t size);
 int SX126xReadCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size);
 
+void SX126xWriteRegister( uint16_t address, uint8_t value );
+uint8_t SX126xReadRegister( uint16_t address );
+
+/*!
+ * \brief Gets the current radio status
+ *
+ * \retval      status        Radio status
+ */
+RadioStatus_t SX126xGetStatus( void );
+
 /*!
  * \brief Returns the instantaneous RSSI value for the last packet received
  *
@@ -66,6 +76,34 @@ int SX126xReadCommand( RadioCommands_t op_code, uint8_t *data, uint16_t size);
  */
 int8_t SX126xGetRssiInst( void );
 
+/*!
+ * \brief Write data to the radio memory
+ *
+ * \param [in]  address       The address of the first byte to write in the radio
+ * \param [in]  buffer        The data to be written in radio's memory
+ * \param [in]  size          The number of bytes to write in radio's memory
+ */
+void SX126xWriteRegisters( uint16_t address, uint8_t *buffer, uint16_t size );
+
+/*!
+ * \brief Read data from the radio memory
+ *
+ * \param [in]  address       The address of the first byte to read from the radio
+ * \param [out] buffer        The buffer that holds data read from radio
+ * \param [in]  size          The number of bytes to read from radio's memory
+ */
+void SX126xReadRegisters( uint16_t address, uint8_t *buffer, uint16_t size );
+
+void WaitOnBusy();
+int GPIORead(int pin) ;
+
+
+/*!
+ * \brief Sets the radio in configuration mode
+ *
+ * \param [in]  mode          The standby mode to put the radio into
+ */
+void SX126xSetStandby( RadioStandbyModes_t mode );
 
 #endif
 

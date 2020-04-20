@@ -100,24 +100,47 @@ int main(int argc, char ** argv)
     }
     //NRESET->1
     system("echo 1 > /sys/class/gpio/gpio22/value");
+    //SX126xWriteCommand(RADIO_SET_STANDBY, 0x00, 1);
+    SX126xSetStandby( STDBY_RC );
+    WaitOnBusy();
+    printf("WaitOnBusy\n");
+    //syncword
+    uint8_t buff;
+    SX126xWriteRegister( REG_LR_SYNCWORD, ( LORA_MAC_PUBLIC_SYNCWORD >> 8 ) & 0xFF );
+    SX126xWriteRegister( REG_LR_SYNCWORD + 1, LORA_MAC_PUBLIC_SYNCWORD & 0xFF );
+    printf("SX1261: syncword: 0x%02X\n",SX126xReadRegister(0x0740));
+    printf("SX1261: syncword: 0x%02X\n",SX126xReadRegister(0x0741));
+    //
+    printf("SX1261: TXMod: 0x%02X\n",SX126xReadRegister(0x0889));
+    printf("SX1261: RXgain: 0x%02X\n",SX126xReadRegister(0x08ac));
+    SX126xWriteRegister( REG_RX_GAIN, 0X96 );
+    printf("SX1261: RXgain: 0x%02X\n",SX126xReadRegister(0x08ac));
+    //
+    printf("SX1261: FSK Syncword: 0x%02X\n",SX126xReadRegister(0x06c0));
+    SX126xWriteRegister( 0x06c0, 0X55 );
+    printf("SX1261: FSK Syncword: 0x%02X\n",SX126xReadRegister(0x06c0));
 
-
-    test_buff[0] = (uint8_t)STDBY_XOSC;
-    SX126xWriteCommand(RADIO_WRITE_REGISTER, test_buff, 1);
-    wait_ms(10);
-    test_buff[0] = 0x00;
-    SX126xReadCommand(RADIO_READ_REGISTER, test_buff, 1);
-    printf("SX1261: get_status: 0x%02X\n", test_buff[0]);
     /* Read status from SX1261 */
-    SX126xReadCommand(RADIO_READ_REGISTER, test_buff, 1);
-    char status_1261=SX126xGetStatus();
-    printf("SX1261: SX1261_status: 0x%02X\n", status_1261);
-    int rssi=SX126xGetRssiInst();
+    //RadioStatus_t status_1261=SX126xGetStatus();
+    uint8_t buf;
+    uint8_t stat = 0;
+    stat = SX126xReadCommand( RADIO_GET_STATUS, &buf, 0 );
+    printf("SX1261: SX1261_status: 0x%02X\n",stat);
+    
+    int8_t rssi = 0;    
+    SX126xReadCommand( RADIO_GET_RSSIINST, &buf, 1 );
+    rssi = -buf >> 1;
     printf("SX1261: RSSI: %d\n", rssi);
-
+    //
+    //RadioIsChannelFree( RadioModems_t modem, uint32_t freq, int16_t rssiThresh, uint32_t maxCarrierSenseTime )
+    if(RadioIsChannelFree(MODEM_FSK,926600000,0,0)){
+        printf("Channel is free\n");
+    } else {
+        printf("Channel is not free\n");
+    }
     lgw_disconnect();
     //NRESET->0
-    system("echo 1 > /sys/class/gpio/gpio22/value");
+    system("echo 0 > /sys/class/gpio/gpio22/value");
     printf("End of test for loragw_spi_sx1260.c\n");
 
     /* Board reset */

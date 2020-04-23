@@ -105,6 +105,19 @@ int GPIORead(int pin) ;
  */
 void SX126xSetStandby( RadioStandbyModes_t mode );
 
+/*!
+ * \brief Sets the Sync Word given by index used in GFSK
+ *
+ * \param [in]  syncWord      SyncWord bytes ( 8 bytes )
+ *
+ * \retval      status        [0: OK, 1: NOK]
+ */
+uint8_t SX126xSetSyncWord( uint8_t *syncWord );
+
+static uint8_t RadioGetFskBandwidthRegValue( uint32_t bandwidth );
+
+RadioPacketTypes_t SX126xGetPacketType( void );
+
 #endif
 
 /* --- EOF ------------------------------------------------------------------ */

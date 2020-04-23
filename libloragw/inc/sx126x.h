@@ -669,20 +669,22 @@ typedef union
 /*!
  * Radio hardware and global parameters
  */
-/*
+
 typedef struct SX126x_s
 {
+    /*
     Gpio_t        Reset;
     Gpio_t        BUSY;
     Gpio_t        DIO1;
     Gpio_t        DIO2;
     Gpio_t        DIO3;
     Spi_t         Spi;
+    */
     PacketParams_t PacketParams;
     PacketStatus_t PacketStatus;
     ModulationParams_t ModulationParams;
 }SX126x_t;
-*/
+
 /*!
  * Hardware IO IRQ callback function definition
  */

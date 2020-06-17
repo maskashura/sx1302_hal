@@ -172,7 +172,7 @@ int sx1250_calibrate(uint8_t rf_chain, uint32_t freq_hz) {
     } else if ((freq_hz > 863E6) && (freq_hz < 870E6)) {
         buff[0] = 0xD7;
         buff[1] = 0xDB;
-    } else if ((freq_hz > 902E6) && (freq_hz < 928E6)) {
+    } else if ((freq_hz >= 902E6) && (freq_hz <= 928E6)) {
         buff[0] = 0xE1;
         buff[1] = 0xE9;
     } else {

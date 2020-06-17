@@ -39,7 +39,10 @@ License: Revised BSD License, see LICENSE.TXT file include in the project
 #include "loragw_spi.h"
 #include "loragw_i2c.h"
 #include "loragw_sx1250.h"
+//#include "loragw_sx126x.h"
 #include "loragw_sx125x.h"
+
+
 #include "loragw_sx1302.h"
 #include "loragw_stts751.h"
 #include "loragw_debug.h"
@@ -189,6 +192,8 @@ static uint8_t ts_addr = 0xFF;
 
 int32_t lgw_sf_getval(int x);
 int32_t lgw_bw_getval(int x);
+
+int8_t lbt_rssi_target_dBm = -80;
 
 /* -------------------------------------------------------------------------- */
 /* --- PRIVATE FUNCTIONS DEFINITION ----------------------------------------- */
@@ -736,6 +741,23 @@ int lgw_start(void) {
         }
     }
 
+    /* LBT config */
+	char *lbt_thres;
+	if (access("lbt_thres", F_OK) == 0) { // file exist (file name : lbt_thres)
+		FILE *fp;
+		fp = fopen("lbt_thres", "r");
+		if (fp != NULL) {
+			fscanf(fp, "%d", &lbt_thres);
+			lbt_rssi_target_dBm=lbt_thres;
+            DEBUG_PRINTF("LBT target = %d\n",lbt_rssi_target_dBm );
+		} 
+	}
+    if (lbt_rssi_target_dBm>20){
+        DEBUG_MSG("SX126X init Start\n");
+        lgw_sx126x_init();
+        
+    }
+
     /* set hal state */
     CONTEXT_STARTED = true;
 
@@ -898,8 +920,14 @@ int lgw_send(struct lgw_pkt_tx_s * pkt_data) {
         DEBUG_MSG("ERROR: INVALID TX MODULATION\n");
         return LGW_HAL_ERROR;
     }
-
-    return sx1302_send(CONTEXT_RF_CHAIN[pkt_data->rf_chain].type, &CONTEXT_TX_GAIN_LUT[pkt_data->rf_chain], CONTEXT_LWAN_PUBLIC, &CONTEXT_FSK, pkt_data);
+    // LBT check
+    if (lgw_sx126x_check_ch_free(pkt_data->freq_hz,lbt_rssi_target_dBm )){
+        return sx1302_send(CONTEXT_RF_CHAIN[pkt_data->rf_chain].type, &CONTEXT_TX_GAIN_LUT[pkt_data->rf_chain], CONTEXT_LWAN_PUBLIC, &CONTEXT_FSK, pkt_data);
+    } else {
+        DEBUG_MSG("LBT: Block package\n");
+        return 0;
+    }
+    
 }
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -1069,5 +1097,7 @@ uint32_t lgw_time_on_air(struct lgw_pkt_tx_s *packet) {
 
     return Tpacket;
 }
+
+
 
 /* --- EOF ------------------------------------------------------------------ */

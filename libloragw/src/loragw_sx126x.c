@@ -63,6 +63,7 @@ License: Revised BSD License, see LICENSE.TXT file include in the project
 uint32_t TxTimeout = 0;
 uint32_t RxTimeout = 0;
 uint8_t MaxPayloadLength = 0xFF;
+int lbt_target=20;
 
 const RadioLoRaBandwidths_t Bandwidths[] = { LORA_BW_125, LORA_BW_250, LORA_BW_500 };
 
@@ -1229,4 +1230,56 @@ void SX126xClearIrqStatus( uint16_t irq )
     buf[0] = ( uint8_t )( ( ( uint16_t )irq >> 8 ) & 0x00FF );
     buf[1] = ( uint8_t )( ( uint16_t )irq & 0x00FF );
     SX126xWriteCommand( RADIO_CLR_IRQSTATUS, buf, 2 );
+}
+
+
+void lgw_sx126x_init(void) {
+    
+    //init sx1261
+    uint8_t buf;
+    uint8_t stat = 0;
+    stat = SX126xReadCommand( RADIO_GET_STATUS, &buf, 0 );
+    printf("SX1261: SX1261_status: 0x%02X\n",stat);
+   
+    SX126xSetStandby( STDBY_RC );
+
+    SX126xSetDio2AsRfSwitchCtrl( true );
+    RadioSetModem( MODEM_LORA );
+    //LoRa Syncword
+    SX126xWriteRegister( REG_LR_SYNCWORD, ( LORA_MAC_PRIVATE_SYNCWORD >> 8 ) & 0xFF );
+    SX126xWriteRegister( REG_LR_SYNCWORD + 1, LORA_MAC_PRIVATE_SYNCWORD & 0xFF );
+
+    SX126xSetRegulatorMode( USE_DCDC );
+    SX126xSetStandby( STDBY_RC );
+    //
+    SX126xClearIrqStatus( IRQ_RADIO_ALL );
+    RadioSetModem( MODEM_LORA );
+    SX126xSetModulationParams( &SX126x.ModulationParams );
+    int set_freq=920000000;
+    RadioSetChannel(set_freq);
+    printf("SX1261: Frequency=%d\n",set_freq); 
+    SX126xSetBufferBaseAddress( 0x00, 0x00 );
+    SX126xSetTxParams( 0, RADIO_RAMP_200_US );
+    SX126xSetSyncWord( ( uint8_t[] ){ 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } );
+    //SX126xSetDioIrqParams( IRQ_RADIO_ALL, IRQ_RADIO_ALL, IRQ_RADIO_NONE, IRQ_RADIO_NONE );
+    SX126xSetDioIrqParams( 0x0242, 0x0242, IRQ_RADIO_NONE, IRQ_RADIO_NONE );
+    SX126xWriteRegister( REG_RX_GAIN, 0X96 );
+    SX126xSetRx( 0xFFFFFF ); // Rx Continuous
+    printf("SX126X INIT. Done\n");
+    //return 0;
+}
+bool lgw_sx126x_check_ch_free(uint32_t set_freq , int8_t rssiThres) {
+    int rssi;
+
+    RadioSetChannel(set_freq);
+    //printf("SX1261: Frequency=%d\n",set_freq); 
+    rssi = SX126xGetRssiInst( );    
+    printf("SX1261: RSSI=%d\n",rssi); 
+    if ((rssiThres <= 20) || ((rssi*-1) >= rssiThres) ){
+        return true;
+    } else {
+        return false;
+    }
+        
+    
 }

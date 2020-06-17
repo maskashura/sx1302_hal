@@ -29,6 +29,7 @@ License: Revised BSD License, see LICENSE.TXT file include in the project
 #include <string.h>
 #include <signal.h>     /* sigaction */
 #include <unistd.h>     /* getopt, access */
+#include<sys/time.h>
 
 
 #include "loragw_spi.h"
@@ -95,6 +96,11 @@ void OnRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr );
 
 int main(int argc, char ** argv)
 {
+    //time counter
+    struct timeval start;
+    struct timeval end;
+    unsigned long timer;
+    //
     static struct sigaction sigact; /* SIGQUIT&SIGINT&SIGTERM signal handling */
 
     uint8_t test_buff[BUFF_SIZE];
@@ -142,7 +148,7 @@ int main(int argc, char ** argv)
     SX126xClearIrqStatus( IRQ_RADIO_ALL );
     RadioSetModem( MODEM_LORA );
     SX126xSetModulationParams( &SX126x.ModulationParams );
-    int set_freq=868000000;
+    int set_freq=920000000;
     RadioSetChannel(set_freq);
     printf("SX1261: Frequency=%d\n",set_freq); 
     SX126xSetBufferBaseAddress( 0x00, 0x00 );
@@ -152,11 +158,32 @@ int main(int argc, char ** argv)
     SX126xSetDioIrqParams( 0x0242, 0x0242, IRQ_RADIO_NONE, IRQ_RADIO_NONE );
     SX126xWriteRegister( REG_RX_GAIN, 0X96 );
     SX126xSetRx( 0xFFFFFF ); // Rx Continuous
+    int rssi;
     while (1){
-    int rssi = SX126xGetRssiInst( );
+    gettimeofday(&start, NULL);
+    rssi = SX126xGetRssiInst( );
+    gettimeofday(&end, NULL);
     //rssi = SX126xGetRssiInst();
     printf("SX1261: RSSI=%d\n",rssi);  
-    sleep(2);      
+    timer = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+    printf("timer = %ld us\n", timer);
+    sleep(2);  
+    //
+    gettimeofday(&start, NULL);
+    set_freq=928000000;
+    RadioSetChannel(set_freq);
+    gettimeofday(&end, NULL);
+    printf("SX1261: Frequency=%d\n",set_freq); 
+    timer = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+    printf("timer = %ld us\n", timer);
+    //
+    rssi = SX126xGetRssiInst( );
+    printf("SX1261: RSSI=%d\n",rssi);
+    sleep(2);  
+    set_freq=920000000;
+    RadioSetChannel(set_freq);
+    printf("SX1261: Frequency=%d\n",set_freq);   
+    sleep(2);   
     }
 
 
